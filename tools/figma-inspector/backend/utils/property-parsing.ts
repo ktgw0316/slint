@@ -17,6 +17,7 @@ const rectangleProperties = [
     "border-radius",
     "border-width",
     "border-color",
+    "children",
 ];
 
 const textProperties = [
@@ -40,7 +41,7 @@ const pathProperties = [
     "stroke",
     "stroke-width",
 ];
-const unsupportedNodeProperties = ["x", "y", "width", "height", "opacity"];
+const unsupportedNodeProperties = ["x", "y", "width", "height", "opacity", "children"];
 
 export function rgbToHex(rgba: RGB | RGBA): string {
     const red = Math.round(rgba.r * 255);
@@ -392,18 +393,22 @@ export async function generateSlintSnippet(
             return await generateRectangleSnippet(sceneNode, useVariables);
         case "TEXT":
             return await generateTextSnippet(sceneNode, useVariables);
+        case "LINE":
         case "VECTOR":
             return await generatePathNodeSnippet(sceneNode, useVariables);
         default:
-            return generateUnsupportedNodeSnippet(sceneNode);
+            return await generateUnsupportedNodeSnippet(sceneNode, useVariables);
     }
 }
 
-export function generateUnsupportedNodeSnippet(sceneNode: SceneNode): string {
+export async function generateUnsupportedNodeSnippet(
+    sceneNode: SceneNode,
+    useVariables: boolean,
+): Promise<string> {
     const properties: string[] = [];
     const nodeType = sceneNode.type;
 
-    unsupportedNodeProperties.forEach((property) => {
+    for (const property of unsupportedNodeProperties) {
         switch (property) {
             case "x":
                 if ("x" in sceneNode && typeof sceneNode.x === "number") {
@@ -456,8 +461,16 @@ export function generateUnsupportedNodeSnippet(sceneNode: SceneNode): string {
                     }
                 }
                 break;
+            case "children":
+                if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
+                    for (const child of sceneNode.children) {
+                        const childSnippet = await generateSlintSnippet(child, useVariables);
+                        properties.push(`${indentation}${childSnippet}`);
+                    }
+                }
+                break;
         }
-    });
+    };
 
     return `//Unsupported type: ${nodeType}\nRectangle {\n${properties.join("\n")}\n}`;
 }
@@ -631,6 +644,14 @@ export async function generateRectangleSnippet(
                         properties.push(...borderWidthAndColor);
                     }
                     break;
+                case "children":
+                    if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
+                        for (const child of sceneNode.children) {
+                            const childSnippet = await generateSlintSnippet(child, useVariables);
+                            properties.push(`${indentation}${childSnippet}`);
+                        }
+                    }
+                    break;
             }
         } catch (err) {
             console.error(
@@ -768,38 +789,56 @@ export async function generatePathNodeSnippet(
                     }
                     break;
                 case "commands":
-                    if (sceneNode.type === "VECTOR") {
-                        try {
-                            const svgString = await sceneNode.exportAsync({
-                                format: "SVG_STRING",
-                            });
+                    if (!(sceneNode.type === "VECTOR" || sceneNode.type === "LINE")) {
+                        break;
+                    }
+                    try {
+                        const svgString = await sceneNode.exportAsync({
+                            format: "SVG_STRING",
+                        });
+                        let pathCommands: string | null = null;
+                        if (sceneNode.type === "VECTOR") {
                             const match = svgString.match(
                                 /<path[^>]*d=(["'])(.*?)\1/,
                             );
                             if (match && match[2]) {
-                                const pathCommands = match[2];
-                                properties.push(
-                                    `${indentation}commands: "${pathCommands}";`,
-                                );
-                            } else {
-                                console.warn(
-                                    "[generatePathNodeSnippet] Could not extract path commands from SVG for node:",
-                                    sceneNode.id,
-                                );
-                                properties.push(
-                                    `${indentation}// Could not extract path commands from SVG`,
-                                );
+                                pathCommands = match[2];
                             }
-                        } catch (e) {
-                            console.error(
-                                "[generatePathNodeSnippet] Error exporting SVG for node:",
+                        } else if (sceneNode.type === "LINE") {
+                            const match = svgString.match(
+                                /<line[^>]*y1=(["'])(.*?)\1[^>]*x2=(["'])(.*?)\3[^>]*y2=(["'])(.*?)\5/,
+                            );
+                            if (match && match[2] && match[4] && match[6]) {
+                                const x1 = 0;
+                                const y1 = match[2];
+                                const x2 = match[4];
+                                const y2 = match[6];
+                                pathCommands = `M${x1} ${y1}L${x2} ${y2}`;
+                            }
+                        }
+                        if (pathCommands) {
+                            properties.push(
+                                `${indentation}commands: "${pathCommands}";`,
+                            );
+                        } else {
+                            console.warn(
+                                "[generatePathNodeSnippet] Could not extract path commands from SVG for node:",
                                 sceneNode.id,
-                                e,
                             );
                             properties.push(
-                                `${indentation}// Error exporting SVG: ${e instanceof Error ? e.message : e}`,
+                                `${indentation}// Could not extract path commands from SVG`,
+                                `${indentation}// ${svgString}`,
                             );
                         }
+                    } catch (e) {
+                        console.error(
+                            "[generatePathNodeSnippet] Error exporting SVG for node:",
+                            sceneNode.id,
+                            e,
+                        );
+                        properties.push(
+                            `${indentation}// Error exporting SVG: ${e instanceof Error ? e.message : e}`,
+                        );
                     }
                     break;
                 case "fill":
