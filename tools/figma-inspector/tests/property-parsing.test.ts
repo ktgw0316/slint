@@ -192,3 +192,10 @@ ${indentation}stroke-width: 2.5px;
 }`;
     expect(snippet).toBe(expectedSnippet);
 });
+
+test("Ellipse node", async () => {
+    const jsonNode = findNodeByName(testJson, "ellipse test");
+    expect(jsonNode).not.toBeNull();
+    const snippet = await getBorderRadius(jsonNode, false);
+    expect(snippet).toBe(`${indentation}border-radius: self.width/2;`);
+});
