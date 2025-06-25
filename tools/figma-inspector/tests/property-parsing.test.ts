@@ -96,6 +96,18 @@ function processVectorNode(json: any): any {
     }
     return json;
 }
+function processLineNode(json: any): any {
+    // You can expand this as needed for your test expectations
+    if (json.type === "LINE") {
+        return {
+            ...json,
+            strokes: json.strokes || [],
+            strokeWeight: json.strokeWeight ?? 1,
+            exportAsync: async () => `<svg><line y1="10" x2="90" y2="90"/></svg>`,
+        };
+    }
+    return json;
+}
 // Convert test JSON to match the API object.
 function processTextNode(json: any): any {
     if (json.type === "TEXT" && json.style) {
@@ -198,4 +210,17 @@ test("Ellipse node", async () => {
     expect(jsonNode).not.toBeNull();
     const snippet = await getBorderRadius(jsonNode, false);
     expect(snippet).toBe(`${indentation}border-radius: self.width/2;`);
+});
+
+test("Line node", async () => {
+    const jsonNode = findNodeByName(testJson, "line test");
+    expect(jsonNode).not.toBeNull();
+    const convertToApiJson = processLineNode(jsonNode);
+    const snippet = await generatePathNodeSnippet(convertToApiJson, false);
+    const expectedSnippet = `line-test := Path {
+${indentation}commands: "M0 10L90 90";
+${indentation}stroke: #ffffff;
+${indentation}stroke-width: 1px;
+}`;
+    expect(snippet).toBe(expectedSnippet);
 });

@@ -768,38 +768,56 @@ export async function generatePathNodeSnippet(
                     }
                     break;
                 case "commands":
-                    if (sceneNode.type === "VECTOR") {
-                        try {
-                            const svgString = await sceneNode.exportAsync({
-                                format: "SVG_STRING",
-                            });
+                    if (!(sceneNode.type === "VECTOR" || sceneNode.type === "LINE")) {
+                        break;
+                    }
+                    try {
+                        const svgString = await sceneNode.exportAsync({
+                            format: "SVG_STRING",
+                        });
+                        let pathCommands: string | null = null;
+                        if (sceneNode.type === "VECTOR") {
                             const match = svgString.match(
                                 /<path[^>]*d=(["'])(.*?)\1/,
                             );
                             if (match && match[2]) {
-                                const pathCommands = match[2];
-                                properties.push(
-                                    `${indentation}commands: "${pathCommands}";`,
-                                );
-                            } else {
-                                console.warn(
-                                    "[generatePathNodeSnippet] Could not extract path commands from SVG for node:",
-                                    sceneNode.id,
-                                );
-                                properties.push(
-                                    `${indentation}// Could not extract path commands from SVG`,
-                                );
+                                pathCommands = match[2];
                             }
-                        } catch (e) {
-                            console.error(
-                                "[generatePathNodeSnippet] Error exporting SVG for node:",
+                        } else if (sceneNode.type === "LINE") {
+                            const match = svgString.match(
+                                /<line[^>]*y1=(["'])(.*?)\1[^>]*x2=(["'])(.*?)\3[^>]*y2=(["'])(.*?)\5/,
+                            );
+                            if (match && match[2] && match[4] && match[6]) {
+                                const x1 = 0;
+                                const y1 = match[2];
+                                const x2 = match[4];
+                                const y2 = match[6];
+                                pathCommands = `M${x1} ${y1}L${x2} ${y2}`;
+                            }
+                        }
+                        if (pathCommands) {
+                            properties.push(
+                                `${indentation}commands: "${pathCommands}";`,
+                            );
+                        } else {
+                            console.warn(
+                                "[generatePathNodeSnippet] Could not extract path commands from SVG for node:",
                                 sceneNode.id,
-                                e,
                             );
                             properties.push(
-                                `${indentation}// Error exporting SVG: ${e instanceof Error ? e.message : e}`,
+                                `${indentation}// Could not extract path commands from SVG`,
+                                `${indentation}// ${svgString}`,
                             );
                         }
+                    } catch (e) {
+                        console.error(
+                            "[generatePathNodeSnippet] Error exporting SVG for node:",
+                            sceneNode.id,
+                            e,
+                        );
+                        properties.push(
+                            `${indentation}// Error exporting SVG: ${e instanceof Error ? e.message : e}`,
+                        );
                     }
                     break;
                 case "fill":
