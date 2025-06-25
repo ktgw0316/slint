@@ -114,6 +114,10 @@ export async function getBorderRadius(
     node: SceneNode,
     useVariables: boolean,
 ): Promise<string | null> {
+    if (node.type === "ELLIPSE") {
+        return `${indentation}border-radius: self.width/2;`;
+    }
+
     if ("boundVariables" in node) {
         const boundVars = (node as any).boundVariables;
         const boundCornerRadiusId = boundVars?.cornerRadius?.id;
@@ -380,6 +384,7 @@ export async function generateSlintSnippet(
         case "FRAME":
             return await generateRectangleSnippet(sceneNode, useVariables);
         case "RECTANGLE":
+        case "ELLIPSE":
         case "GROUP":
             return await generateRectangleSnippet(sceneNode, useVariables);
         case "COMPONENT":
