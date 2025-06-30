@@ -187,7 +187,7 @@ test("Text node", async () => {
     expect(jsonNode).not.toBeNull();
     const convertToApiJson = processTextNode(jsonNode);
     const snippet = await generateTextSnippet(convertToApiJson, false);
-    const expectedSnippet = `monthly := Text {\n${indentation}text: "Monthly";\n${indentation}color: #896fff;\n${indentation}font-family: "Roboto";\n${indentation}font-size: 12px;\n${indentation}font-weight: 400;\n}`;
+    const expectedSnippet = `// monthly\nText {\n${indentation}text: "Monthly";\n${indentation}color: #896fff;\n${indentation}font-family: "Roboto";\n${indentation}font-size: 12px;\n${indentation}font-weight: 400;\n}`;
     expect(snippet).toBe(expectedSnippet);
 });
 
@@ -196,7 +196,7 @@ test("Vector node", async () => {
     expect(jsonNode).not.toBeNull();
     const convertToApiJson = processVectorNode(jsonNode);
     const snippet = await generatePathNodeSnippet(convertToApiJson, false);
-    const expectedSnippet = `vector-test := Path {
+    const expectedSnippet = `// vector-test\nPath {
 ${indentation}commands: "M10 10L90 90";
 ${indentation}fill: #2e5adf;
 ${indentation}stroke: #000000;
@@ -217,7 +217,7 @@ test("Line node", async () => {
     expect(jsonNode).not.toBeNull();
     const convertToApiJson = processLineNode(jsonNode);
     const snippet = await generatePathNodeSnippet(convertToApiJson, false);
-    const expectedSnippet = `line-test := Path {
+    const expectedSnippet = `// line-test\nPath {
 ${indentation}commands: "M0 10L90 90";
 ${indentation}stroke: #ffffff;
 ${indentation}stroke-width: 1px;

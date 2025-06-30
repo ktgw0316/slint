@@ -17,6 +17,7 @@ const rectangleProperties = [
     "border-radius",
     "border-width",
     "border-color",
+    "children",
 ];
 
 const textProperties = [
@@ -40,7 +41,7 @@ const pathProperties = [
     "stroke",
     "stroke-width",
 ];
-const unsupportedNodeProperties = ["x", "y", "width", "height", "opacity"];
+const unsupportedNodeProperties = ["x", "y", "width", "height", "opacity", "children"];
 
 export function rgbToHex(rgba: RGB | RGBA): string {
     const red = Math.round(rgba.r * 255);
@@ -388,22 +389,27 @@ export async function generateSlintSnippet(
         case "GROUP":
             return await generateRectangleSnippet(sceneNode, useVariables);
         case "COMPONENT":
-        case "INSTANCE":
             return await generateRectangleSnippet(sceneNode, useVariables);
+        case "INSTANCE":
+            return await generateInstanceSnippet(sceneNode);
         case "TEXT":
             return await generateTextSnippet(sceneNode, useVariables);
+        case "LINE":
         case "VECTOR":
             return await generatePathNodeSnippet(sceneNode, useVariables);
         default:
-            return generateUnsupportedNodeSnippet(sceneNode);
+            return await generateUnsupportedNodeSnippet(sceneNode, useVariables);
     }
 }
 
-export function generateUnsupportedNodeSnippet(sceneNode: SceneNode): string {
+export async function generateUnsupportedNodeSnippet(
+    sceneNode: SceneNode,
+    useVariables: boolean,
+): Promise<string> {
     const properties: string[] = [];
     const nodeType = sceneNode.type;
 
-    unsupportedNodeProperties.forEach((property) => {
+    for (const property of unsupportedNodeProperties) {
         switch (property) {
             case "x":
                 if ("x" in sceneNode && typeof sceneNode.x === "number") {
@@ -456,8 +462,16 @@ export function generateUnsupportedNodeSnippet(sceneNode: SceneNode): string {
                     }
                 }
                 break;
+            case "children":
+                if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
+                    for (const child of sceneNode.children) {
+                        const childSnippet = await generateSlintSnippet(child, useVariables);
+                        properties.push(`${indentation}${childSnippet}`);
+                    }
+                }
+                break;
         }
-    });
+    };
 
     return `//Unsupported type: ${nodeType}\nRectangle {\n${properties.join("\n")}\n}`;
 }
@@ -631,6 +645,14 @@ export async function generateRectangleSnippet(
                         properties.push(...borderWidthAndColor);
                     }
                     break;
+                case "children":
+                    if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
+                        for (const child of sceneNode.children) {
+                            const childSnippet = await generateSlintSnippet(child, useVariables);
+                            properties.push(`${indentation}${childSnippet}`);
+                        }
+                    }
+                    break;
             }
         } catch (err) {
             console.error(
@@ -645,6 +667,18 @@ export async function generateRectangleSnippet(
 
     return `${nodeId} := Rectangle {\n${properties.join("\n")}\n}`;
 }
+export async function generateInstanceSnippet(sceneNode: InstanceNode): Promise<string> {
+    const nodeId = sanitizePropertyName(sceneNode.name);
+    const mainComponent = await sceneNode.getMainComponentAsync();
+
+    if (mainComponent) {
+        const mainComponentName = mainComponent.parent?.name;
+        return `// ${nodeId}\n${indentation}${mainComponentName} {}`;
+    } else {
+        return `// Main component not found for instance: ${nodeId}`;
+    }
+}
+
 export async function generatePathNodeSnippet(
     sceneNode: SceneNode,
     useVariables: boolean,
@@ -942,7 +976,7 @@ export async function generatePathNodeSnippet(
         }
     }
 
-    return `${nodeId} := Path {\n${properties.join("\n")}\n}`;
+    return `// ${nodeId}\nPath {\n${properties.join("\n")}\n}`;
 }
 export async function generateTextSnippet(
     sceneNode: SceneNode,
@@ -1160,5 +1194,5 @@ export async function generateTextSnippet(
         }
     }
 
-    return `${nodeId} := Text {\n${properties.join("\n")}\n}`;
+    return `// ${nodeId}\nText {\n${properties.join("\n")}\n}`;
 }
