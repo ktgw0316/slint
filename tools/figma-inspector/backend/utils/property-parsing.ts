@@ -31,6 +31,32 @@ const textProperties = [
     "horizontal-alignment",
 ];
 
+const frameNodeProperties = [
+    "x",
+    "y",
+    "width",
+    "height",
+    // "col",
+    // "row",
+    // "colspan",
+    // "rowspan",
+    // "horizontal-stretch",
+    // "vertical-stretch",
+    "maxWidth", // "max-width",
+    "maxHeight", // "max-height",
+    "minWidth",  // "min-width",
+    "minHeight", // "min-height",
+    // "preferred-width",
+    // "preferred-height",
+    "itemSpacing",    // "spacing",
+    "paddingLeft",    // "padding-left",
+    "paddingRight",   // "padding-right",
+    "paddingTop",     // "padding-top",
+    "paddingBottom",  // "padding-bottom",
+    "layoutAlign",
+    "children",
+];
+
 const pathProperties = [
     "width",
     "height",
@@ -383,7 +409,7 @@ export async function generateSlintSnippet(
 
     switch (nodeType) {
         case "FRAME":
-            return await generateRectangleSnippet(sceneNode, useVariables);
+            return await generateFrameSnippet(sceneNode, useVariables);
         case "RECTANGLE":
         case "ELLIPSE":
         case "GROUP":
@@ -667,6 +693,179 @@ export async function generateRectangleSnippet(
 
     return `${nodeId} := Rectangle {\n${properties.join("\n")}\n}`;
 }
+
+function slintAlignmentFrom(layoutAlign: AutoLayoutChildrenMixin["layoutAlign"]): string {
+    let alignment: string;
+    switch (layoutAlign) {
+        case "MIN":
+            alignment = "start";
+            break;
+        case "CENTER":
+            alignment = "center";
+            break;
+        case "MAX":
+            alignment = "end";
+            break;
+        case "STRETCH":
+            alignment = "stretch";
+            break;
+        case "INHERIT":
+        default:
+            alignment = "space-between";
+            break;
+    }
+    return `alignment: ${alignment};`;
+}
+
+export async function generateFrameSnippet(
+    sceneNode: FrameNode,
+    useVariables: boolean,
+): Promise<string> {
+    const nodeId = sanitizePropertyName(sceneNode.name);
+
+    let layout: string;
+    switch (sceneNode.layoutMode) {
+        case "HORIZONTAL":
+            layout = "HorizontalLayout";
+            break;
+        case "VERTICAL":
+            layout = "VerticalLayout";
+            break;
+        case "NONE":
+        default:
+            layout = "Rectangle";
+            break;
+    }
+
+    const properties: string[] = [];
+    for (const property of frameNodeProperties) {
+        switch (property) {
+            case "x":
+                if ("x" in sceneNode && typeof sceneNode.x === "number") {
+                    const x = roundNumber(sceneNode.x);
+                    if (x) {
+                        properties.push(`${indentation}x: ${x}px;`);
+                    }
+                }
+                break;
+            case "y":
+                if ("y" in sceneNode && typeof sceneNode.y === "number") {
+                    const y = roundNumber(sceneNode.y);
+                    if (y) {
+                        properties.push(`${indentation}y: ${y}px;`);
+                    }
+                }
+                break;
+            case "width":
+                if ("width" in sceneNode && typeof sceneNode.width === "number") {
+                    const width = roundNumber(sceneNode.width);
+                    if (width) {
+                        properties.push(`${indentation}width: ${width}px;`);
+                    }
+                }
+                break;
+            case "height":
+                if ("height" in sceneNode && typeof sceneNode.height === "number") {
+                    const height = roundNumber(sceneNode.height);
+                    if (height) {
+                        properties.push(`${indentation}height: ${height}px;`);
+                    }
+                }
+                break;
+            case "maxWidth":
+                if ("maxWidth" in sceneNode && typeof sceneNode.maxWidth === "number") {
+                    const maxWidth = roundNumber(sceneNode.maxWidth);
+                    if (maxWidth) {
+                        properties.push(`${indentation}max-width: ${maxWidth}px;`);
+                    }
+                }
+                break;
+            case "maxHeight":
+                if ("maxHeight" in sceneNode && typeof sceneNode.maxHeight === "number") {
+                    const maxHeight = roundNumber(sceneNode.maxHeight);
+                    if (maxHeight) {
+                        properties.push(`${indentation}max-height: ${maxHeight}px;`);
+                    }
+                }
+                break;
+            case "minHeight":
+                if ("minHeight" in sceneNode && typeof sceneNode.minHeight === "number") {
+                    const minHeight = roundNumber(sceneNode.minHeight);
+                    if (minHeight) {
+                        properties.push(`${indentation}min-height: ${minHeight}px;`);
+                    }
+                }
+                break;
+            case "minWidth":
+                if ("minWidth" in sceneNode && typeof sceneNode.minWidth === "number") {
+                    const minWidth = roundNumber(sceneNode.minWidth);
+                    if (minWidth) {
+                        properties.push(`${indentation}min-width: ${minWidth}px;`);
+                    }
+                }
+                break;
+            case "itemSpacing":
+                if ("itemSpacing" in sceneNode && typeof sceneNode.itemSpacing === "number") {
+                    const itemSpacing = roundNumber(sceneNode.itemSpacing);
+                    if (itemSpacing) {
+                        properties.push(`${indentation}spacing: ${itemSpacing}px;`);
+                    }
+                }
+                break;
+            case "paddingLeft":
+                if ("paddingLeft" in sceneNode && typeof sceneNode.paddingLeft === "number") {
+                    const paddingLeft = roundNumber(sceneNode.paddingLeft);
+                    if (paddingLeft) {
+                        properties.push(`${indentation}padding-left: ${paddingLeft}px;`);
+                    }
+                }
+                break;
+            case "paddingRight":
+                if ("paddingRight" in sceneNode && typeof sceneNode.paddingRight === "number") {
+                    const paddingRight = roundNumber(sceneNode.paddingRight);
+                    if (paddingRight) {
+                        properties.push(`${indentation}padding-right: ${paddingRight}px;`);
+                    }
+                }
+                break;
+            case "paddingTop":
+                if ("paddingTop" in sceneNode && typeof sceneNode.paddingTop === "number") {
+                    const paddingTop = roundNumber(sceneNode.paddingTop);
+                    if (paddingTop) {
+                        properties.push(`${indentation}padding-top: ${paddingTop}px;`);
+                    }
+                }
+                break;
+            case "paddingBottom":
+                if ("paddingBottom" in sceneNode && typeof sceneNode.paddingBottom === "number") {
+                    const paddingBottom = roundNumber(sceneNode.paddingBottom);
+                    if (paddingBottom) {
+                        properties.push(`${indentation}padding-bottom: ${paddingBottom}px;`);
+                    }
+                }
+                break;
+            case "layoutAlign":
+                if ("layoutAlign" in sceneNode && typeof sceneNode.layoutAlign === "string") {
+                    const alignment = slintAlignmentFrom(sceneNode.layoutAlign);
+                    properties.push(`${indentation}${alignment}`);
+                }
+                break;
+            case "children":
+                if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
+                    for (const child of sceneNode.children) {
+                        const childSnippet = await generateSlintSnippet(child, useVariables);
+                        properties.push(`${indentation}${childSnippet}`);
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    return `// ${nodeId}\n${layout} {\n${properties.join("\n")}\n}`;
+}
+
 export async function generateInstanceSnippet(sceneNode: InstanceNode): Promise<string> {
     const nodeId = sanitizePropertyName(sceneNode.name);
     const mainComponent = await sceneNode.getMainComponentAsync();
