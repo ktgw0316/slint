@@ -7,67 +7,64 @@ import {
 } from "./export-variables";
 
 export const indentation = "    ";
-const rectangleProperties = [
+
+const sharedNodeProperties = [
+    "children",
     "x",
     "y",
     "width",
     "height",
-    "fill",
+
+    "maxWidth", // "max-width",
+    "maxHeight", // "max-height",
+    "minWidth",  // "min-width",
+    "minHeight", // "min-height",
+
+    "itemSpacing",    // "spacing",
+
+    "layoutAlign",
+
+    "paddingLeft",    // "padding-left",
+    "paddingRight",   // "padding-right",
+    "paddingTop",     // "padding-top",
+    "paddingBottom",  // "padding-bottom",
+
     "opacity",
+];
+
+const rectangleProperties = [
     "border-radius",
     "border-width",
     "border-color",
-    "children",
+    "fills",
 ];
 
 const textProperties = [
-    "x",
-    "y",
     "text",
-    "fill",
+    "fills",
     "font-family",
     "font-size",
     "font-weight",
     "horizontal-alignment",
 ];
 
-const frameNodeProperties = [
-    "x",
-    "y",
-    "width",
-    "height",
-    // "col",
-    // "row",
-    // "colspan",
-    // "rowspan",
-    // "horizontal-stretch",
-    // "vertical-stretch",
-    "maxWidth", // "max-width",
-    "maxHeight", // "max-height",
-    "minWidth",  // "min-width",
-    "minHeight", // "min-height",
-    // "preferred-width",
-    // "preferred-height",
-    "itemSpacing",    // "spacing",
-    "paddingLeft",    // "padding-left",
-    "paddingRight",   // "padding-right",
-    "paddingTop",     // "padding-top",
-    "paddingBottom",  // "padding-bottom",
-    "layoutAlign",
-    "children",
-];
+// const frameNodeProperties = [
+// "col",
+// "row",
+// "colspan",
+// "rowspan",
+// "horizontal-stretch",
+// "vertical-stretch",
+// "preferred-width",
+// "preferred-height",
+// ];
 
 const pathProperties = [
-    "width",
-    "height",
-    "x",
-    "y",
     "commands",
-    "fill",
+    "fills",
     "stroke",
     "stroke-width",
 ];
-const unsupportedNodeProperties = ["x", "y", "width", "height", "opacity", "children"];
 
 export function rgbToHex(rgba: RGB | RGBA): string {
     const red = Math.round(rgba.r * 255);
@@ -428,88 +425,60 @@ export async function generateSlintSnippet(
     }
 }
 
-export async function generateUnsupportedNodeSnippet(
-    sceneNode: SceneNode,
-    useVariables: boolean,
-): Promise<string> {
-    const properties: string[] = [];
-    const nodeType = sceneNode.type;
-
-    for (const property of unsupportedNodeProperties) {
-        switch (property) {
-            case "x":
-                if ("x" in sceneNode && typeof sceneNode.x === "number") {
-                    const x = roundNumber(sceneNode.x);
-                    if (x) {
-                        properties.push(`${indentation}x: ${x}px;`);
-                    }
-                }
-                break;
-            case "y":
-                if ("y" in sceneNode && typeof sceneNode.y === "number") {
-                    const y = roundNumber(sceneNode.y);
-                    if (y) {
-                        properties.push(`${indentation}y: ${y}px;`);
-                    }
-                }
-                break;
-            case "width":
-                if (
-                    "width" in sceneNode &&
-                    typeof sceneNode.width === "number"
-                ) {
-                    const width = roundNumber(sceneNode.width);
-                    if (width) {
-                        properties.push(`${indentation}width: ${width}px;`);
-                    }
-                }
-                break;
-            case "height":
-                if (
-                    "height" in sceneNode &&
-                    typeof sceneNode.height === "number"
-                ) {
-                    const height = roundNumber(sceneNode.height);
-                    if (height) {
-                        properties.push(`${indentation}height: ${height}px;`);
-                    }
-                }
-                break;
-            case "opacity":
-                if (
-                    "opacity" in sceneNode &&
-                    typeof sceneNode.opacity === "number"
-                ) {
-                    const opacity = sceneNode.opacity;
-                    if (opacity !== 1) {
-                        properties.push(
-                            `${indentation}opacity: ${Math.round(opacity * 100)}%;`,
-                        );
-                    }
-                }
-                break;
-            case "children":
-                if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
-                    for (const child of sceneNode.children) {
-                        const childSnippet = await generateSlintSnippet(child, useVariables);
-                        properties.push(`${indentation}${childSnippet}`);
-                    }
-                }
-                break;
-        }
-    };
-
-    return `//Unsupported type: ${nodeType}\nRectangle {\n${properties.join("\n")}\n}`;
+function slintAlignmentFrom(layoutAlign: AutoLayoutChildrenMixin["layoutAlign"]): string {
+    let alignment: string;
+    switch (layoutAlign) {
+        case "MIN":
+            alignment = "start";
+            break;
+        case "CENTER":
+            alignment = "center";
+            break;
+        case "MAX":
+            alignment = "end";
+            break;
+        case "STRETCH":
+            alignment = "stretch";
+            break;
+        case "INHERIT":
+        default:
+            alignment = "space-between";
+            break;
+    }
+    return `alignment: ${alignment};`;
 }
 
-export async function generateRectangleSnippet(
+async function getFillValue(sceneNode: SceneNode, useVariables: boolean) : Promise<string | null> {
+    if (
+        "fills" in sceneNode &&
+        Array.isArray(sceneNode.fills) &&
+        sceneNode.fills.length > 0 &&
+        sceneNode.fills[0].visible !== false
+    ) {
+        const firstFill = sceneNode.fills[0] as Paint;
+        if (firstFill.type === "SOLID") {
+            let fillValue: string | null = null;
+            if (useVariables) {
+                const boundVarId = firstFill.boundVariables?.color?.id;
+                if (boundVarId) {
+                    fillValue = await getVariablePathString(boundVarId);
+                }
+                if (fillValue) {
+                    return fillValue;
+                }
+            }
+        }
+        return getBrush(firstFill);
+    }
+    return null;
+}
+
+async function pushSharedNodeProperties(
+    properties: string[],
     sceneNode: SceneNode,
     useVariables: boolean,
-): Promise<string> {
-    const properties: string[] = [];
-    const nodeId = sanitizePropertyName(sceneNode.name);
-
-    for (const property of rectangleProperties) {
+) {
+    for (const property of sharedNodeProperties) {
         try {
             switch (property) {
                 case "x":
@@ -571,7 +540,6 @@ export async function generateRectangleSnippet(
                         properties.push(`${indentation}y: ${yValue};`);
                     }
                     break;
-
                 case "width":
                     const boundWidthVarId = (sceneNode as any).boundVariables
                         ?.width?.id;
@@ -610,36 +578,81 @@ export async function generateRectangleSnippet(
                         );
                     }
                     break;
-                case "fill":
-                    if (
-                        "fills" in sceneNode &&
-                        Array.isArray(sceneNode.fills) &&
-                        sceneNode.fills.length > 0
-                    ) {
-                        const firstFill = sceneNode.fills[0];
-                        if (firstFill.type === "SOLID") {
-                            const boundVarId =
-                                firstFill.boundVariables?.color?.id;
-                            let fillValue: string | null = null;
-                            if (boundVarId && useVariables) {
-                                fillValue =
-                                    await getVariablePathString(boundVarId);
-                            }
-                            if (!fillValue) {
-                                fillValue = getBrush(firstFill);
-                            }
-                            if (fillValue) {
-                                properties.push(
-                                    `${indentation}background: ${fillValue};`,
-                                );
-                            }
-                        } else {
-                            const brush = getBrush(firstFill);
-                            if (brush) {
-                                properties.push(
-                                    `${indentation}background: ${brush};`,
-                                );
-                            }
+                case "maxWidth":
+                    if ("maxWidth" in sceneNode && typeof sceneNode.maxWidth === "number") {
+                        const maxWidth = roundNumber(sceneNode.maxWidth);
+                        if (maxWidth) {
+                            properties.push(`${indentation}max-width: ${maxWidth}px;`);
+                        }
+                    }
+                    break;
+                case "maxHeight":
+                    if ("maxHeight" in sceneNode && typeof sceneNode.maxHeight === "number") {
+                        const maxHeight = roundNumber(sceneNode.maxHeight);
+                        if (maxHeight) {
+                            properties.push(`${indentation}max-height: ${maxHeight}px;`);
+                        }
+                    }
+                    break;
+                case "minHeight":
+                    if ("minHeight" in sceneNode && typeof sceneNode.minHeight === "number") {
+                        const minHeight = roundNumber(sceneNode.minHeight);
+                        if (minHeight) {
+                            properties.push(`${indentation}min-height: ${minHeight}px;`);
+                        }
+                    }
+                    break;
+                case "minWidth":
+                    if ("minWidth" in sceneNode && typeof sceneNode.minWidth === "number") {
+                        const minWidth = roundNumber(sceneNode.minWidth);
+                        if (minWidth) {
+                            properties.push(`${indentation}min-width: ${minWidth}px;`);
+                        }
+                    }
+                    break;
+                case "itemSpacing":
+                    if ("itemSpacing" in sceneNode && typeof sceneNode.itemSpacing === "number") {
+                        const itemSpacing = roundNumber(sceneNode.itemSpacing);
+                        if (itemSpacing) {
+                            properties.push(`${indentation}spacing: ${itemSpacing}px;`);
+                        }
+                    }
+                    break;
+                case "layoutAlign":
+                    if ("layoutAlign" in sceneNode && typeof sceneNode.layoutAlign === "string") {
+                        const alignment = slintAlignmentFrom(sceneNode.layoutAlign);
+                        properties.push(`${indentation}${alignment}`);
+                    }
+                    break;
+                case "paddingLeft":
+                    if ("paddingLeft" in sceneNode && typeof sceneNode.paddingLeft === "number") {
+                        const paddingLeft = roundNumber(sceneNode.paddingLeft);
+                        if (paddingLeft) {
+                            properties.push(`${indentation}padding-left: ${paddingLeft}px;`);
+                        }
+                    }
+                    break;
+                case "paddingRight":
+                    if ("paddingRight" in sceneNode && typeof sceneNode.paddingRight === "number") {
+                        const paddingRight = roundNumber(sceneNode.paddingRight);
+                        if (paddingRight) {
+                            properties.push(`${indentation}padding-right: ${paddingRight}px;`);
+                        }
+                    }
+                    break;
+                case "paddingTop":
+                    if ("paddingTop" in sceneNode && typeof sceneNode.paddingTop === "number") {
+                        const paddingTop = roundNumber(sceneNode.paddingTop);
+                        if (paddingTop) {
+                            properties.push(`${indentation}padding-top: ${paddingTop}px;`);
+                        }
+                    }
+                    break;
+                case "paddingBottom":
+                    if ("paddingBottom" in sceneNode && typeof sceneNode.paddingBottom === "number") {
+                        const paddingBottom = roundNumber(sceneNode.paddingBottom);
+                        if (paddingBottom) {
+                            properties.push(`${indentation}padding-bottom: ${paddingBottom}px;`);
                         }
                     }
                     break;
@@ -650,6 +663,44 @@ export async function generateRectangleSnippet(
                         );
                     }
                     break;
+            }
+        } catch (err) {
+            console.error(
+                `[generateRectangleSnippet] Error processing property "${property}":`,
+                err,
+            );
+            properties.push(
+                `${indentation}// Error processing ${property}: ${err instanceof Error ? err.message : err}`,
+            );
+        }
+    }
+}
+
+export async function generateUnsupportedNodeSnippet(
+    sceneNode: SceneNode,
+    useVariables: boolean,
+): Promise<string> {
+    const properties: string[] = [];
+    const nodeType = sceneNode.type;
+
+    await pushSharedNodeProperties(properties, sceneNode, useVariables);
+    await pushChildrenProperties(properties, sceneNode, useVariables);
+
+    return `//Unsupported type: ${nodeType}\nRectangle {\n${properties.join("\n")}\n}`;
+}
+
+export async function generateRectangleSnippet(
+    sceneNode: SceneNode,
+    useVariables: boolean,
+): Promise<string> {
+    const properties: string[] = [];
+    const nodeId = sanitizePropertyName(sceneNode.name);
+
+    await pushSharedNodeProperties(properties, sceneNode, useVariables);
+
+    for (const property of rectangleProperties) {
+        try {
+            switch (property) {
                 case "border-radius":
                     const borderRadiusProp = await getBorderRadius(
                         sceneNode,
@@ -659,10 +710,7 @@ export async function generateRectangleSnippet(
                         properties.push(borderRadiusProp);
                     }
                     break;
-
                 case "border-width":
-                    break;
-                case "border-color":
                     const borderWidthAndColor = await getBorderWidthAndColor(
                         sceneNode,
                         useVariables,
@@ -671,12 +719,13 @@ export async function generateRectangleSnippet(
                         properties.push(...borderWidthAndColor);
                     }
                     break;
-                case "children":
-                    if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
-                        for (const child of sceneNode.children) {
-                            const childSnippet = await generateSlintSnippet(child, useVariables);
-                            properties.push(`${indentation}${childSnippet}`);
-                        }
+                case "border-color":
+                    // Handled in border-width
+                    break;
+                case "fills":
+                    const fillValue = await getFillValue(sceneNode, useVariables);
+                    if (fillValue) {
+                        properties.push(`${indentation}background: ${fillValue};`);
                     }
                     break;
             }
@@ -691,30 +740,22 @@ export async function generateRectangleSnippet(
         }
     }
 
+    await pushChildrenProperties(properties, sceneNode, useVariables);
+
     return `${nodeId} := Rectangle {\n${properties.join("\n")}\n}`;
 }
 
-function slintAlignmentFrom(layoutAlign: AutoLayoutChildrenMixin["layoutAlign"]): string {
-    let alignment: string;
-    switch (layoutAlign) {
-        case "MIN":
-            alignment = "start";
-            break;
-        case "CENTER":
-            alignment = "center";
-            break;
-        case "MAX":
-            alignment = "end";
-            break;
-        case "STRETCH":
-            alignment = "stretch";
-            break;
-        case "INHERIT":
-        default:
-            alignment = "space-between";
-            break;
+async function pushChildrenProperties(
+    properties: string[],
+    sceneNode: SceneNode,
+    useVariables: boolean,
+) {
+    if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
+        for (const child of sceneNode.children) {
+            const childSnippet = await generateSlintSnippet(child, useVariables);
+            properties.push(`${indentation}${childSnippet}`);
+        }
     }
-    return `alignment: ${alignment};`;
 }
 
 export async function generateFrameSnippet(
@@ -738,130 +779,8 @@ export async function generateFrameSnippet(
     }
 
     const properties: string[] = [];
-    for (const property of frameNodeProperties) {
-        switch (property) {
-            case "x":
-                if ("x" in sceneNode && typeof sceneNode.x === "number") {
-                    const x = roundNumber(sceneNode.x);
-                    if (x) {
-                        properties.push(`${indentation}x: ${x}px;`);
-                    }
-                }
-                break;
-            case "y":
-                if ("y" in sceneNode && typeof sceneNode.y === "number") {
-                    const y = roundNumber(sceneNode.y);
-                    if (y) {
-                        properties.push(`${indentation}y: ${y}px;`);
-                    }
-                }
-                break;
-            case "width":
-                if ("width" in sceneNode && typeof sceneNode.width === "number") {
-                    const width = roundNumber(sceneNode.width);
-                    if (width) {
-                        properties.push(`${indentation}width: ${width}px;`);
-                    }
-                }
-                break;
-            case "height":
-                if ("height" in sceneNode && typeof sceneNode.height === "number") {
-                    const height = roundNumber(sceneNode.height);
-                    if (height) {
-                        properties.push(`${indentation}height: ${height}px;`);
-                    }
-                }
-                break;
-            case "maxWidth":
-                if ("maxWidth" in sceneNode && typeof sceneNode.maxWidth === "number") {
-                    const maxWidth = roundNumber(sceneNode.maxWidth);
-                    if (maxWidth) {
-                        properties.push(`${indentation}max-width: ${maxWidth}px;`);
-                    }
-                }
-                break;
-            case "maxHeight":
-                if ("maxHeight" in sceneNode && typeof sceneNode.maxHeight === "number") {
-                    const maxHeight = roundNumber(sceneNode.maxHeight);
-                    if (maxHeight) {
-                        properties.push(`${indentation}max-height: ${maxHeight}px;`);
-                    }
-                }
-                break;
-            case "minHeight":
-                if ("minHeight" in sceneNode && typeof sceneNode.minHeight === "number") {
-                    const minHeight = roundNumber(sceneNode.minHeight);
-                    if (minHeight) {
-                        properties.push(`${indentation}min-height: ${minHeight}px;`);
-                    }
-                }
-                break;
-            case "minWidth":
-                if ("minWidth" in sceneNode && typeof sceneNode.minWidth === "number") {
-                    const minWidth = roundNumber(sceneNode.minWidth);
-                    if (minWidth) {
-                        properties.push(`${indentation}min-width: ${minWidth}px;`);
-                    }
-                }
-                break;
-            case "itemSpacing":
-                if ("itemSpacing" in sceneNode && typeof sceneNode.itemSpacing === "number") {
-                    const itemSpacing = roundNumber(sceneNode.itemSpacing);
-                    if (itemSpacing) {
-                        properties.push(`${indentation}spacing: ${itemSpacing}px;`);
-                    }
-                }
-                break;
-            case "paddingLeft":
-                if ("paddingLeft" in sceneNode && typeof sceneNode.paddingLeft === "number") {
-                    const paddingLeft = roundNumber(sceneNode.paddingLeft);
-                    if (paddingLeft) {
-                        properties.push(`${indentation}padding-left: ${paddingLeft}px;`);
-                    }
-                }
-                break;
-            case "paddingRight":
-                if ("paddingRight" in sceneNode && typeof sceneNode.paddingRight === "number") {
-                    const paddingRight = roundNumber(sceneNode.paddingRight);
-                    if (paddingRight) {
-                        properties.push(`${indentation}padding-right: ${paddingRight}px;`);
-                    }
-                }
-                break;
-            case "paddingTop":
-                if ("paddingTop" in sceneNode && typeof sceneNode.paddingTop === "number") {
-                    const paddingTop = roundNumber(sceneNode.paddingTop);
-                    if (paddingTop) {
-                        properties.push(`${indentation}padding-top: ${paddingTop}px;`);
-                    }
-                }
-                break;
-            case "paddingBottom":
-                if ("paddingBottom" in sceneNode && typeof sceneNode.paddingBottom === "number") {
-                    const paddingBottom = roundNumber(sceneNode.paddingBottom);
-                    if (paddingBottom) {
-                        properties.push(`${indentation}padding-bottom: ${paddingBottom}px;`);
-                    }
-                }
-                break;
-            case "layoutAlign":
-                if ("layoutAlign" in sceneNode && typeof sceneNode.layoutAlign === "string") {
-                    const alignment = slintAlignmentFrom(sceneNode.layoutAlign);
-                    properties.push(`${indentation}${alignment}`);
-                }
-                break;
-            case "children":
-                if ("children" in sceneNode && Array.isArray(sceneNode.children)) {
-                    for (const child of sceneNode.children) {
-                        const childSnippet = await generateSlintSnippet(child, useVariables);
-                        properties.push(`${indentation}${childSnippet}`);
-                    }
-                }
-                break;
-            default:
-                break;
-        }
-    }
+    await pushSharedNodeProperties(properties, sceneNode, useVariables);
+    await pushChildrenProperties(properties, sceneNode, useVariables);
 
     return `// ${nodeId}\n${layout} {\n${properties.join("\n")}\n}`;
 }
@@ -885,121 +804,11 @@ export async function generatePathNodeSnippet(
     const properties: string[] = [];
     const nodeId = sanitizePropertyName(sceneNode.name);
 
+    await pushSharedNodeProperties(properties, sceneNode, useVariables);
+
     for (const property of pathProperties) {
         try {
             switch (property) {
-                case "x":
-                    const boundPathXVarId = (sceneNode as any).boundVariables?.x
-                        ?.id;
-                    let xPathValue: string | null = null;
-                    if (boundPathXVarId && useVariables) {
-                        xPathValue =
-                            await getVariablePathString(boundPathXVarId);
-                    }
-                    if (
-                        !xPathValue &&
-                        "x" in sceneNode &&
-                        typeof sceneNode.x === "number"
-                    ) {
-                        const x = sceneNode.x;
-                        if (x === 0) {
-                            xPathValue = "0px";
-                        } else {
-                            const roundedX = roundNumber(x);
-                            if (roundedX !== null) {
-                                xPathValue = `${roundedX}px`;
-                            }
-                        }
-                    }
-                    if (xPathValue && sceneNode.parent?.type !== "PAGE") {
-                        properties.push(`${indentation}x: ${xPathValue};`);
-                    }
-                    break;
-                case "y":
-                    const boundPathYVarId = (sceneNode as any).boundVariables?.y
-                        ?.id;
-                    let yPathValue: string | null = null;
-                    if (boundPathYVarId && useVariables) {
-                        yPathValue =
-                            await getVariablePathString(boundPathYVarId);
-                    }
-                    if (
-                        !yPathValue &&
-                        "y" in sceneNode &&
-                        typeof sceneNode.y === "number"
-                    ) {
-                        const y = sceneNode.y;
-                        if (y === 0) {
-                            yPathValue = "0px";
-                        } else {
-                            const roundedY = roundNumber(y);
-                            if (roundedY !== null) {
-                                yPathValue = `${roundedY}px`;
-                            }
-                        }
-                    }
-                    if (yPathValue && sceneNode.parent?.type !== "PAGE") {
-                        properties.push(`${indentation}y: ${yPathValue};`);
-                    }
-                    break;
-                case "width":
-                    const boundPathWidthVarId = (sceneNode as any)
-                        .boundVariables?.width?.id;
-                    let widthPathValue: string | null = null;
-                    if (boundPathWidthVarId && useVariables) {
-                        widthPathValue =
-                            await getVariablePathString(boundPathWidthVarId);
-                    }
-                    if (
-                        !widthPathValue &&
-                        "width" in sceneNode &&
-                        typeof sceneNode.width === "number"
-                    ) {
-                        const w = sceneNode.width;
-                        if (w === 0) {
-                            widthPathValue = "0px";
-                        } else {
-                            const roundedW = roundNumber(w);
-                            if (roundedW !== null) {
-                                widthPathValue = `${roundedW}px`;
-                            }
-                        }
-                    }
-                    if (widthPathValue) {
-                        properties.push(
-                            `${indentation}width: ${widthPathValue};`,
-                        );
-                    }
-                    break;
-                case "height":
-                    const boundPathHeightVarId = (sceneNode as any)
-                        .boundVariables?.height?.id;
-                    let heightPathValue: string | null = null;
-                    if (boundPathHeightVarId && useVariables) {
-                        heightPathValue =
-                            await getVariablePathString(boundPathHeightVarId);
-                    }
-                    if (
-                        !heightPathValue &&
-                        "height" in sceneNode &&
-                        typeof sceneNode.height === "number"
-                    ) {
-                        const h = sceneNode.height;
-                        if (h === 0) {
-                            heightPathValue = "0px";
-                        } else {
-                            const roundedH = roundNumber(h);
-                            if (roundedH !== null) {
-                                heightPathValue = `${roundedH}px`;
-                            }
-                        }
-                    }
-                    if (heightPathValue) {
-                        properties.push(
-                            `${indentation}height: ${heightPathValue};`,
-                        );
-                    }
-                    break;
                 case "commands":
                     if (!(sceneNode.type === "VECTOR" || sceneNode.type === "LINE")) {
                         break;
@@ -1053,38 +862,10 @@ export async function generatePathNodeSnippet(
                         );
                     }
                     break;
-                case "fill":
-                    if (
-                        "fills" in sceneNode &&
-                        Array.isArray(sceneNode.fills) &&
-                        sceneNode.fills.length > 0 &&
-                        sceneNode.fills[0].visible !== false
-                    ) {
-                        const firstFill = sceneNode.fills[0] as Paint;
-                        if (firstFill.type === "SOLID") {
-                            const boundVarId = (firstFill as any).boundVariables
-                                ?.color?.id;
-                            let fillValue: string | null = null;
-                            if (boundVarId && useVariables) {
-                                fillValue =
-                                    await getVariablePathString(boundVarId);
-                            }
-                            if (!fillValue) {
-                                fillValue = getBrush(firstFill);
-                            }
-                            if (fillValue) {
-                                properties.push(
-                                    `${indentation}fill: ${fillValue};`,
-                                );
-                            }
-                        } else {
-                            const brush = getBrush(firstFill);
-                            if (brush) {
-                                properties.push(
-                                    `${indentation}fill: ${brush};`,
-                                );
-                            }
-                        }
+                case "fills":
+                    const fillValue = await getFillValue(sceneNode, useVariables);
+                    if (fillValue) {
+                        properties.push(`${indentation}fill: ${fillValue};`);
                     }
                     break;
                 case "stroke":
@@ -1175,8 +956,11 @@ export async function generatePathNodeSnippet(
         }
     }
 
+    await pushChildrenProperties(properties, sceneNode, useVariables);
+
     return `// ${nodeId}\nPath {\n${properties.join("\n")}\n}`;
 }
+
 export async function generateTextSnippet(
     sceneNode: SceneNode,
     useVariables: boolean,
@@ -1184,53 +968,11 @@ export async function generateTextSnippet(
     const properties: string[] = [];
     const nodeId = sanitizePropertyName(sceneNode.name);
 
+    await pushSharedNodeProperties(properties, sceneNode, useVariables);
+
     for (const property of textProperties) {
         try {
             switch (property) {
-                case "x":
-                    const boundXVarId = (sceneNode as any).boundVariables?.x
-                        ?.id; // Assume direct object binding
-                    let xValue: string | null = null;
-                    if (boundXVarId && useVariables) {
-                        xValue = await getVariablePathString(boundXVarId);
-                    }
-                    if (
-                        !xValue &&
-                        "x" in sceneNode &&
-                        typeof sceneNode.x === "number"
-                    ) {
-                        const x = roundNumber(sceneNode.x);
-                        if (x !== null) {
-                            // roundNumber returns null for 0
-                            xValue = `${x}px`;
-                        }
-                    }
-                    if (xValue) {
-                        properties.push(`${indentation}x: ${xValue};`);
-                    }
-                    break;
-                case "y":
-                    const boundYVarId = (sceneNode as any).boundVariables?.y
-                        ?.id;
-                    let yValue: string | null = null;
-                    if (boundYVarId && useVariables) {
-                        yValue = await getVariablePathString(boundYVarId);
-                    }
-                    if (
-                        !yValue &&
-                        "y" in sceneNode &&
-                        typeof sceneNode.y === "number"
-                    ) {
-                        const y = roundNumber(sceneNode.y);
-                        if (y !== null) {
-                            // roundNumber returns null for 0
-                            yValue = `${y}px`;
-                        }
-                    }
-                    if (yValue) {
-                        properties.push(`${indentation}y: ${yValue};`);
-                    }
-                    break;
                 case "text":
                     // Assuming 'characters' binding is also an array if it exists
                     const boundCharsVarId = (sceneNode as any).boundVariables
@@ -1247,38 +989,10 @@ export async function generateTextSnippet(
                         properties.push(`${indentation}text: ${textValue};`);
                     }
                     break;
-                case "fill":
-                    if (
-                        "fills" in sceneNode &&
-                        Array.isArray(sceneNode.fills) &&
-                        sceneNode.fills.length > 0
-                    ) {
-                        const firstFill = sceneNode.fills[0];
-                        if (firstFill.type === "SOLID") {
-                            // Access ID via array index [0]
-                            const boundVarId = (sceneNode as any).boundVariables
-                                ?.fills?.[0]?.id;
-                            let fillValue: string | null = null;
-                            if (boundVarId && useVariables) {
-                                fillValue =
-                                    await getVariablePathString(boundVarId);
-                            }
-                            if (!fillValue) {
-                                fillValue = getBrush(firstFill);
-                            }
-                            if (fillValue) {
-                                properties.push(
-                                    `${indentation}color: ${fillValue};`,
-                                );
-                            }
-                        } else {
-                            const brush = getBrush(firstFill);
-                            if (brush) {
-                                properties.push(
-                                    `${indentation}color: ${brush};`,
-                                );
-                            }
-                        }
+                case "fills":
+                    const fillValue = await getFillValue(sceneNode, useVariables);
+                    if (fillValue) {
+                        properties.push(`${indentation}color: ${fillValue};`);
                     }
                     break;
                 case "font-family":
@@ -1392,6 +1106,8 @@ export async function generateTextSnippet(
             );
         }
     }
+
+    await pushChildrenProperties(properties, sceneNode, useVariables);
 
     return `// ${nodeId}\nText {\n${properties.join("\n")}\n}`;
 }
