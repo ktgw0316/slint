@@ -482,6 +482,12 @@ async function pushSharedNodeProperties(
         try {
             switch (property) {
                 case "x":
+                    if (
+                        sceneNode.parent?.type === "FRAME" &&
+                        sceneNode.parent.layoutMode === "HORIZONTAL"
+                    ) {
+                        break;
+                    }
                     const boundXVarId = (sceneNode as any).boundVariables?.x
                         ?.id;
                     let xValue: string | null = null;
@@ -511,6 +517,12 @@ async function pushSharedNodeProperties(
                     break;
 
                 case "y":
+                    if (
+                        sceneNode.parent?.type === "FRAME" &&
+                        sceneNode.parent.layoutMode === "VERTICAL"
+                    ) {
+                        break;
+                    }
                     const boundYVarId = (sceneNode as any).boundVariables?.y
                         ?.id;
                     let yValue: string | null = null;
